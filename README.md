@@ -8,5 +8,5 @@ IDA script  for vmprotect Windows Api address decoder
 - Use the patchOllyScript() method to print the OllyScript that can be patched.
 
 API Decoder anaysis post [Link] (https://sfkino.tistory.com/73)
-https://sfkino.tistory.com/73
+
 
