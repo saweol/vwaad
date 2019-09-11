@@ -20,10 +20,14 @@ class vwaad:
     call_list = []
 
     gadget_list = []
+    dummy_gadget_list = []
+    dummy_fail_list = []
+
+    dummy_patch_list = []
 
     decoded_api = []
 
-    depth = 100
+    depth = 300
 
 
 
@@ -41,6 +45,15 @@ class vwaad:
             else:
                 self.gadget_list.append(result)
         self.decodeAddress()
+        
+        for x in self.call_list:
+            print ""
+            result = self.functionDummyTracer(x)
+            if result is False:
+                self.dummy_fail_list.append(x)
+            else:
+                self.dummy_patch_list.append(x + 5)
+                self.dummy_gadget_list.append(result)
 
         print("################### vmp0 Call List ###################")
         self.printCallList()
@@ -53,6 +66,12 @@ class vwaad:
 
         print("################### Decoded Api List ###################")
         self.printDecodedApi()
+        
+        print("################### Decoded Dummy Api List ###################")
+        self.printDummyGadget()
+
+        for x in self.dummy_patch_list:
+            print hex(x).rstrip('L')
     
 
     ############################## PRINT FUNCTION ##############################
@@ -85,6 +104,42 @@ class vwaad:
             print hex(x).rstrip("L"),
         print ("")
     
+    def printDebugFailList(self):
+        print ("Debug Fail List")
+
+        for x in self.fail_list:
+            self.functionTracer(x, debug = True)
+            print ("")
+    
+    def printDebugDummyFailList(self):
+        print ("Debug Fail List")
+
+        for x in self.dummy_fail_list:
+            self.functionDummyTracer(x, debug = True)
+            print ("")
+
+
+    ############################## PRINT DUMMY FUNCTION ##############################
+
+    def printDummyGadget(self):
+        idx = 0
+        print ("gadget_list")
+        for gadget in self.dummy_gadget_list:
+            print ('DUMMY gadget address : {0}'.format(hex(gadget[0]['entrypoint']).rstrip('L')))
+            #self.dummy_patch_list.append(hex(gadget[0]['entrypoint']).rstrip('L')+5)
+            for y in gadget:
+                print( '{0} {1} : {2} '.format(y['flow'],hex(y['addr']).rstrip('L'), y['gadget']))
+            print ("")
+            data = 0
+        print ("")
+    
+    def printDebugFailList(self):
+        print ("Debug Fail List")
+
+        for x in self.fail_list:
+            self.functionTracer(x, debug = True)
+            print ("")
+    
     ############################## UTILITY FUNCTION ##############################
 
     '''
@@ -96,6 +151,11 @@ class vwaad:
         for gadget in self.decoded_api:
             print ('asm {0}, \"call {1}\"'.format(hex(gadget['original_addr']).rstrip("L").lstrip("0x"), 
                 hex(gadget['decoded_address']).rstrip("L")))
+    
+    def patchDummyOllyScript(self):
+        for gadget in self.dummy_patch_list:
+            print ('fill {0}, 1, 90'.format(hex(gadget).rstrip("L").lstrip("0x")))
+    
     
 
     '''
@@ -147,11 +207,16 @@ class vwaad:
         depth = self.depth
         result = []
         ep = addr
+
+        dummy = False
         
         while idx < depth:
             idx = idx + 1
             if debug is True:
-                print( '{0} {1} {2} {3}'.format(idx, hex(addr), idc.GetDisasm(addr), hex(get_operand_value(addr,0)) ))
+                print( '{0} {1} {2} {3}'.format(idx, hex(addr).rstrip('L'), idc.GetDisasm(addr), hex(get_operand_value(addr,0)) ))
+
+            #dummy = self.findDummyGadget(addr)
+
             
             if idc.GetDisasm(addr)[:4] == "retn":
                 break
@@ -177,11 +242,82 @@ class vwaad:
             
             else:
                 addr = idc.NextHead(addr)
+        
+        if debug is True and len(result) > 0:
+            for x in result:
+                print ("{0} : {1} {2} ".format(hex(x['addr']).rstrip('L'), hex(x['const']), x['gadget']  ))
+            
 
         if len(result) == 3:
             return result
         else:
             return False
+
+    
+    '''
+    Function Tracing without conditional branching
+    arg : function address, debug falg
+    return : gadget list / False
+    '''
+    def functionDummyTracer(self, addr, debug = False):
+        idx = 0
+        depth = self.depth
+        result = []
+        ep = addr
+
+        dummy = False
+
+        
+        
+        
+        while idx < depth:
+            idx = idx + 1
+            #print( 'DUMMY : {0} {1} {2} {3}'.format(idx, hex(addr).rstrip('L'), idc.GetDisasm(addr), hex(get_operand_value(addr,0)) ))
+            if debug is True:
+                print( '{0} {1} {2} {3}'.format(idx, hex(addr).rstrip('L'), idc.GetDisasm(addr), hex(get_operand_value(addr,0)) ))
+
+            #dummy = self.findDummyGadget(addr)
+
+
+            
+            if idc.GetDisasm(addr)[:4] == "retn":
+                break
+            
+            elif idc.GetDisasm(addr)[:3] == "jmp" or idc.GetDisasm(addr)[:4] == "call":
+                #print get_operand_value(addr,0)
+                addr = get_operand_value(addr,0)
+            
+            elif self.findFirstDummyGadget(addr) == True:
+                #print "MATCH FIRST"
+                if len(result) > 0:
+                    result = []
+                result.append(self.getGadget(addr, ep, 1))
+                addr = idc.NextHead(addr)
+
+            elif len(result) == 1 and self.findSecondDummyGadget(addr, result[0]['reg']) == True:
+                #input gadget
+                result.append(self.getGadget(addr,ep, 2))
+                addr = idc.NextHead(addr)
+
+            elif len(result) == 2 and self.findThirdDummyGadget(addr, result[0]['reg']) == True:
+                result.append(self.getGadget(addr,ep, 3))
+                addr = idc.NextHead(addr)
+            
+            else:
+                addr = idc.NextHead(addr)
+        
+        if debug is True and len(result) > 0:
+            for x in result:
+                print ("{0} : {1} {2} ".format(hex(x['addr']).rstrip('L'), hex(x['const']), x['gadget']  ))
+            
+
+
+        print ""
+        if len(result) == 3:
+            return result
+        else:
+            return False
+
 
     #Utility
     '''
@@ -195,7 +331,7 @@ class vwaad:
                 return idc.SegStart(seg), idc.SegEnd(seg), idc.SegEnd(seg) - idc.SegStart(seg)
 
     
-    #처리 
+    #API 가젯 처리 
     '''
     Find the first gadget in the form "mov R32, CONST".
     arg : address
@@ -239,6 +375,59 @@ class vwaad:
         else:
             return False
     
+    #Dummy 가젯 처리 
+    '''
+    DummyGadget
+    10062696    8B4424 30                      MOV EAX,DWORD PTR SS:[ESP+30]
+    10069014    8D80 01000000                  LEA EAX,DWORD PTR DS:[EAX+1]
+    10069028    894424 38                      MOV DWORD PTR SS:[ESP+38],EAX
+    '''
+
+    '''
+    Find the first dummy gadget in the form "mov R32, [ESP+CONST]".
+    arg : address
+    return : True/False
+    '''
+    def findFirstDummyGadget(self, eip):
+        
+        if idc.GetDisasm(eip)[:4] == "mov ":
+            if GetOpnd(eip,0)[0] == "e" and GetOpnd(eip,1)[:5] == "[esp+":
+                print "FIRST MATCH TRUE", idc.GetDisasm(eip)
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    '''
+    Find the second gadget in the form "lea R32, [R32 + 1]".
+    arg : address, register
+    return : True/False
+    '''
+    def findSecondDummyGadget(self, eip,reg):
+        if idc.GetDisasm(eip)[:4] == "lea ":
+            if GetOpnd(eip,0) == reg and GetOpnd(eip,1)[1:4] == reg and GetOpnd(eip,1)[-3:] == "+1]":
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    '''
+    Find the third gadget in the form "lea R32, [R32 + CONST]".
+    arg : address, register
+    return : True/False
+    '''
+    def findThirdDummyGadget(self, eip,reg):
+        
+        if idc.GetDisasm(eip)[:4] == "mov ":
+            if GetOpnd(eip,0)[:5] == "[esp+" and GetOpnd(eip,1) == reg:
+                return True
+            else:
+                return False
+        else:
+            return False
+    
     '''
     get gadget from address
     arg : address, entrypoint address, gadget number
@@ -269,7 +458,28 @@ class vwaad:
                 'original_assembly' : idc.GetDisasm(gadget[0]['entrypoint']), \
                 'decoded_address' : data}))
             data = 0
+    
+    '''
+    DummyGadget
+    10062696    8B4424 30                      MOV EAX,DWORD PTR SS:[ESP+30]
+    10069014    8D80 01000000                  LEA EAX,DWORD PTR DS:[EAX+1]
+    10069028    894424 38                      MOV DWORD PTR SS:[ESP+38],EAX
+    '''
 
+    '''
+    def findDummyGadget(self,eip):
+        idx = 0
+        data = 0
+
+        disass = idc.GetDisasm(eip)
+        print ("[DEBUG] DUMMY VALUE FIND : {0} : {1}\t{2}\t{3}".format(hex(eip).rstrip('L'), disass, GetOpnd(eip,0), GetOpnd(eip,1)))
+
+        if disass[:4] == "lea" and (GetOpnd(eip,0)[:2] == "e" and GetOpnd(eip,1)[:2] == "[e" and GetOpnd(eip,1)[:-3] == "+1]"):
+            print ("[DEBUG] DUMMY VALUE FIND : {0} : {1}\t{2}\t{3}".format(hex(eip).lstrip('L'), disass, GetOpnd(eip,1), GetOpnd(eip,1)))
+            return True
+        else:
+            return False
+    '''
 
 
 
