@@ -33,18 +33,11 @@ class vwaad:
 
     def __init__(self, targetSeg = ".text", vmpSeg = ".vmp0"):      
         #Get Segment Info (start, end, size)
-        
+        self.vmpSeg = ".asp0"
+        vmpSeg = ".asp0"
         if self.getVmpCallList(targetSeg, vmpSeg) is not True:
             print ("Get Call list Fail")
             return
-        
-        for x in self.call_list:
-            result = self.functionTracer(x)
-            if result is False:
-                self.fail_list.append(x)
-            else:
-                self.gadget_list.append(result)
-        self.decodeAddress()
         
         for x in self.call_list:
             print ""
@@ -58,6 +51,47 @@ class vwaad:
                 else:
                     self.dummy_patch_list.append(x + 5)
                     self.dummy_gadget_list.append(result)
+        
+        self.patchDummyCode()
+        
+        self.call_list = []
+
+        if self.getVmpCallList(targetSeg, vmpSeg) is not True:
+            print ("Get Call list Fail")
+            return
+        #self.dummy_patch_list = []
+        #self.dummy_gadget_list = []
+
+        for x in self.call_list:
+            print ""
+            result = self.functionDummyTracer(x)
+            if result is False:
+                self.dummy_fail_list.append(x)
+            else:
+                if idaapi.get_bytes(x + 5,1) != '\x90':
+                    self.dummy_patch_list.append(x + 5)
+                    self.dummy_gadget_list.append(result)
+                '''
+                else:
+                    self.dummy_patch_list.append(x + 5)
+                    self.dummy_gadget_list.append(result)
+                '''
+        
+        self.patchDummyCode()
+        self.call_list = []
+
+        if self.getVmpCallList(targetSeg, vmpSeg) is not True:
+            print ("Get Call list Fail")
+            return
+        
+        for x in self.call_list:
+            result = self.functionTracer(x)
+            if result is False:
+                self.fail_list.append(x)
+            else:
+                self.gadget_list.append(result)
+        self.decodeAddress()
+        
 
         print("################### vmp0 Call List ###################")
         self.printCallList()
