@@ -3,6 +3,7 @@
 Autor : JHJ
 Project : VMProtect Windows Api Address Decoder
 TEST Ver : IDA 7.0
+Target Version : IDA 7.4
 '''
 import idc
 import idaapi
@@ -31,7 +32,7 @@ class vwaad:
 
 
 
-    def __init__(self, targetSeg = ".text", vmpSeg = ".vmp0"):      
+    def __init__(self, targetSeg = ".text", vmpSeg = ".asp0"):      
         #Get Segment Info (start, end, size)
         
         if self.getVmpCallList(targetSeg, vmpSeg) is not True:
@@ -47,11 +48,13 @@ class vwaad:
         self.decodeAddress()
         
         for x in self.call_list:
-            print ""
+            #print ""
             result = self.functionDummyTracer(x)
             if result is False:
                 self.dummy_fail_list.append(x)
             else:
+                self.dummy_patch_list.append(x + 5)
+                self.dummy_gadget_list.append(result)
                 if idaapi.get_bytes(x + 5,1) != '\x90':
                     self.dummy_patch_list.append(x + 5)
                     self.dummy_gadget_list.append(result)
@@ -201,8 +204,11 @@ class vwaad:
                     idx = idx + 1
                     self.vmp_list.append(addr)
                     self.call_list.append(dis_ea)
+            #under IDA 7.4
+            #dis_ea = idc.NextHead(dis_ea)
+            #over IDA 7.4
+            dis_ea = idc.next_head(dis_ea)
 
-            dis_ea = idc.NextHead(dis_ea)
         
         return True
 
@@ -240,25 +246,38 @@ class vwaad:
                 if len(result) > 0:
                     result = []
                 result.append(self.getGadget(addr, ep, 1))
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
             
             elif len(result) == 1 and self.findSecondGadget(addr, result[0]['reg']) == True:
                 #input gadget
                 result.append(self.getGadget(addr,ep, 2))
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
 
             elif len(result) == 2 and self.findThirdGadget(addr, result[0]['reg']) == True:
                 result.append(self.getGadget(addr,ep, 3))
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
             
             else:
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
         
         if debug is True and len(result) > 0:
             for x in result:
                 print ("{0} : {1} {2} ".format(hex(x['addr']).rstrip('L'), hex(x['const']), x['gadget']  ))
             
 
+        print ""
         if len(result) == 3:
             return result
         else:
@@ -303,19 +322,31 @@ class vwaad:
                 if len(result) > 0:
                     result = []
                 result.append(self.getGadget(addr, ep, 1))
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
 
             elif len(result) == 1 and self.findSecondDummyGadget(addr, result[0]['reg']) == True:
                 #input gadget
                 result.append(self.getGadget(addr,ep, 2))
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
 
             elif len(result) == 2 and self.findThirdDummyGadget(addr, result[0]['reg']) == True:
                 result.append(self.getGadget(addr,ep, 3))
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
             
             else:
-                addr = idc.NextHead(addr)
+                #under IDA 7.4
+                #addr = idc.NextHead(addr)
+                #over IDA 7.4
+                addr = idc.next_head(addr)
         
         if debug is True and len(result) > 0:
             for x in result:
@@ -328,7 +359,6 @@ class vwaad:
             return result
         else:
             return False
-
 
     #Utility
 
@@ -356,8 +386,14 @@ class vwaad:
     '''
     def getSegName(self, segName):
         for seg in idautils.Segments():
-            if idc.SegName(seg) == segName:
-                return idc.SegStart(seg), idc.SegEnd(seg), idc.SegEnd(seg) - idc.SegStart(seg)
+            #under IDA 7.4
+            #if idc.SegName(seg) == segName:
+            #over IDA 7.4
+            if idc.get_segm_name(seg) == segName:
+                #under IDA 7.4
+                #return idc.SegStart(seg), idc.SegEnd(seg), idc.SegEnd(seg) - idc.SegStart(seg)
+                #over IDA 7.4
+                return idc.get_segm_start(seg), idc.get_segm_end(seg), idc.get_segm_end(seg) - idc.get_segm_start(seg)
 
     
     #API 가젯 처리 
@@ -368,7 +404,10 @@ class vwaad:
     '''
     def findFirstGadget(self, eip):
         if idc.GetDisasm(eip)[:4] == "mov ":
-            if GetOpnd(eip,0)[0] == "e" and (GetOpnd(eip,1)[:7] == "(offset" or GetOpnd(eip,1)[:6] == "offset" or GetOpnd(eip,1)[-1] == "h"):
+            #under IDA 7.4
+            #if GetOpnd(eip,0)[0] == "e" and (GetOpnd(eip,1)[:7] == "(offset" or GetOpnd(eip,1)[:6] == "offset" or GetOpnd(eip,1)[-1] == "h"):
+            #over IDA 7.4
+            if idc.print_operand(eip,0)[0] == "e" and (idc.print_operand(eip,1)[:7] == "(offset" or idc.print_operand(eip,1)[:6] == "offset" or idc.print_operand(eip,1)[-1] == "h"):
                 return True
             else:
                 return False
@@ -383,7 +422,10 @@ class vwaad:
     def findSecondGadget(self, eip,reg):
         
         if idc.GetDisasm(eip)[:4] == "mov ":
-            if GetOpnd(eip,0) == reg and (GetOpnd(eip,1)[:2] == "[e" or GetOpnd(eip,1)[:-2] == "h]"):
+            #under IDA 7.4
+            #if GetOpnd(eip,0) == reg and (GetOpnd(eip,1)[:2] == "[e" or GetOpnd(eip,1)[:-2] == "h]"):
+            #over IDA 7.4
+            if idc.print_operand(eip,0) == reg and (idc.print_operand(eip,1)[:2] == "[e" or idc.print_operand(eip,1)[:-2] == "h]"):
                 return True
             else:
                 return False
@@ -393,11 +435,13 @@ class vwaad:
     '''
     Find the third gadget in the form "lea R32, [R32 + CONST]".
     arg : address, register
-    return : True/False
     '''
     def findThirdGadget(self, eip,reg):
         if idc.GetDisasm(eip)[:4] == "lea ":
-            if GetOpnd(eip,0) == reg and (GetOpnd(eip,1)[:2] == "[e" or GetOpnd(eip,1)[:-2] == "h]"):
+            #under IDA 7.4
+            #if GetOpnd(eip,0) == reg and (GetOpnd(eip,1)[:2] == "[e" or GetOpnd(eip,1)[:-2] == "h]"):
+            #over IDA 7.4
+            if idc.print_operand(eip,0) == reg and (idc.print_operand(eip,1)[:2] == "[e" or idc.print_operand(eip,1)[:-2] == "h]"):
                 return True
             else:
                 return False
@@ -405,12 +449,6 @@ class vwaad:
             return False
     
     #Dummy 가젯 처리 
-    '''
-    DummyGadget
-    10062696    8B4424 30                      MOV EAX,DWORD PTR SS:[ESP+30]
-    10069014    8D80 01000000                  LEA EAX,DWORD PTR DS:[EAX+1]
-    10069028    894424 38                      MOV DWORD PTR SS:[ESP+38],EAX
-    '''
 
     '''
     Find the first dummy gadget in the form "mov R32, [ESP+CONST]".
@@ -420,7 +458,10 @@ class vwaad:
     def findFirstDummyGadget(self, eip):
         
         if idc.GetDisasm(eip)[:4] == "mov ":
-            if GetOpnd(eip,0)[0] == "e" and GetOpnd(eip,1)[:5] == "[esp+":
+            #under IDA 7.4
+            #if GetOpnd(eip,0)[0] == "e" and GetOpnd(eip,1)[:5] == "[esp+":
+            #over IDA 7.4
+            if idc.print_operand(eip,0)[0] == "e" and idc.print_operand(eip,1)[:5] == "[esp+":
                 print "FIRST MATCH TRUE", idc.GetDisasm(eip)
                 return True
             else:
@@ -435,7 +476,10 @@ class vwaad:
     '''
     def findSecondDummyGadget(self, eip,reg):
         if idc.GetDisasm(eip)[:4] == "lea ":
-            if GetOpnd(eip,0) == reg and GetOpnd(eip,1)[1:4] == reg and GetOpnd(eip,1)[-3:] == "+1]":
+            #under IDA 7.4
+            #if GetOpnd(eip,0) == reg and GetOpnd(eip,1)[1:4] == reg and GetOpnd(eip,1)[-3:] == "+1]":
+            #over IDA 7.4
+            if idc.print_operand(eip,0) == reg and idc.print_operand(eip,1)[1:4] == reg and idc.print_operand(eip,1)[-3:] == "+1]":
                 return True
             else:
                 return False
@@ -450,7 +494,10 @@ class vwaad:
     def findThirdDummyGadget(self, eip,reg):
         
         if idc.GetDisasm(eip)[:4] == "mov ":
-            if GetOpnd(eip,0)[:5] == "[esp+" and GetOpnd(eip,1) == reg:
+            #under IDA 7.4
+            #if GetOpnd(eip,0)[:5] == "[esp+" and GetOpnd(eip,1) == reg:
+            #over IDA 7.4
+            if idc.print_operand(eip,0)[:5] == "[esp+" and idc.print_operand(eip,1) == reg:
                 return True
             else:
                 return False
@@ -463,7 +510,10 @@ class vwaad:
     return : True/False
     '''
     def getGadget(self, eip, ep, flow):
-        return dict({ 'flow' : flow,'entrypoint' :ep, 'addr': eip, 'gadget': idc.GetDisasm(eip), 'reg': GetOpnd(eip,0), 'const': get_operand_value(eip,1)})
+        #under IDA 7.4
+        #return dict({ 'flow' : flow,'entrypoint' :ep, 'addr': eip, 'gadget': idc.GetDisasm(eip), 'reg': GetOpnd(eip,0), 'const': get_operand_value(eip,1)})
+        #over IDA 7.4
+        return dict({ 'flow' : flow,'entrypoint' :ep, 'addr': eip, 'gadget': idc.GetDisasm(eip), 'reg': idc.print_operand(eip,0), 'const': get_operand_value(eip,1)})
     
     '''
     decode address from gadget

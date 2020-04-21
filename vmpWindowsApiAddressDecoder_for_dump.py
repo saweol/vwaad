@@ -3,6 +3,7 @@
 Autor : JHJ
 Project : VMProtect Windows Api Address Decoder
 TEST Ver : IDA 7.0
+Target Version : IDA 7.4
 '''
 import idc
 import idaapi
@@ -31,7 +32,7 @@ class vwaad:
 
 
 
-    def __init__(self, targetSeg = ".text", vmpSeg = ".vmp0"):      
+    def __init__(self, targetSeg = ".text", vmpSeg = ".asp0"):      
         #Get Segment Info (start, end, size)
         self.vmpSeg = ".asp0"
         vmpSeg = ".asp0"
@@ -389,7 +390,9 @@ class vwaad:
     return : segment start address, segment end address, segment size
     '''
     def getSegName(self, segName):
+        print segName
         for seg in idautils.Segments():
+            print idc.SegName(seg)
             if idc.SegName(seg) == segName:
                 return idc.SegStart(seg), idc.SegEnd(seg), idc.SegEnd(seg) - idc.SegStart(seg)
 
